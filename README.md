@@ -14,6 +14,18 @@ The system accepts unstructured customer complaint narratives via **PDF/DOCX/TXT
 
 ---
 
+## 📹 Code Explanation Video
+
+> **Video Link**: [Watch the Full End-to-End Code & Architecture Walkthrough](https://youtu.be/YOUR_VIDEO_LINK_HERE) *(Replace with your uploaded Loom/YouTube/Drive link)*  
+>
+> **Walkthrough Scope**:
+> 1. **Frontend Input**: User narrative submission & PDF/DOCX document upload via React & Redux Toolkit.
+> 2. **API Layer**: FastAPI endpoints (`/api/v1/complaints/process`, `/upload`, `/copilot/chat`).
+> 3. **AI & Workflow**: 7-node LangGraph State Machine pipeline powered by Groq (`gemma2-9b-it`) and PostgreSQL.
+> 4. **Output & UI Sync**: Real-time form population, risk scoring, duplicate banners, Ishikawa/CAPA display, and field highlight animations.
+
+---
+
 ## 💡 Key Features
 
 1. **Dual-Input Complaint Processing**:

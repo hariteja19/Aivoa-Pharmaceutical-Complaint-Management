@@ -19,17 +19,21 @@ def fallback_capa_recommendations(fields: Dict[str, Any], risk: Dict[str, Any]) 
     severity = risk.get("severity_level", "Low")
     batch = fields.get("batch_lot_number", "Unknown Batch")
     
-    capas = [
-        f"[Immediate Corrective Action] Place remaining warehouse stock for batch '{batch}' on Quality Hold/Quarantine pending investigation.",
-        f"[Immediate Corrective Action] Retrieve and visually inspect retained retention samples for batch '{batch}'.",
-        "[Preventive Action] Perform full batch production record audit and review equipment logbooks for anomalies.",
-        "[Preventive Action] Re-verify online sensor calibration and update operator In-Process Control (IPC) checklist SOP."
-    ]
-
     if severity in ["Critical", "Major"]:
-        capas.insert(1, f"[Immediate Corrective Action] Issue Quality Alert to distribution channels and evaluate field health hazards.")
-
-    return capas
+        return [
+            f"[Immediate Corrective Action] Place remaining warehouse stock for batch '{batch}' on Quality Hold/Quarantine pending investigation.",
+            "[Immediate Corrective Action] Issue Quality Alert to distribution channels and evaluate field health hazards.",
+            f"[Immediate Corrective Action] Retrieve and visually inspect retained retention samples for batch '{batch}'.",
+            "[Preventive Action] Perform full batch production record audit and review equipment logbooks for anomalies.",
+            "[Preventive Action] Re-verify online sensor calibration and update operator In-Process Control (IPC) checklist SOP."
+        ]
+    else:
+        return [
+            f"[Immediate Corrective Action] Inspect retention samples for batch '{batch}' to evaluate product baseline quality.",
+            "[Corrective Action] Review packaging line logbooks and in-process inspection records for batch integrity.",
+            "[Preventive Action] Verify vision inspection system parameters and packaging illumination standards.",
+            "[Preventive Action] Reinforce visual inspection SOPs and packaging line clearance procedures with operators."
+        ]
 
 def capa_node(state: Dict[str, Any]) -> Dict[str, Any]:
     logger.info("Executing LangGraph CAPA Recommendations Node...")

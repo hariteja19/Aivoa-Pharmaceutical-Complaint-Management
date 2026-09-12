@@ -11,6 +11,7 @@ class Complaint(Base):
     complaint_number = Column(String, unique=True, index=True, nullable=False)
     
     # 13 Core Structured Complaint Fields
+    complaint_reference = Column(String, nullable=True, index=True)
     complaint_source = Column(String, nullable=True)
     customer_name = Column(String, nullable=True)
     product_name = Column(String, nullable=False, index=True)

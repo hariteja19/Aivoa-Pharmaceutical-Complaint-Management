@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { fetchComplaintsListApi, fetchComplaintByIdApi } from '../../services/api';
+import { fetchComplaintsListApi, fetchComplaintByIdApi, deleteComplaintApi } from '../../services/api';
 
 export const fetchComplaintsList = createAsyncThunk(
   'complaintsList/fetchList',
@@ -19,6 +19,20 @@ export const fetchComplaintById = createAsyncThunk(
     try {
       const data = await fetchComplaintByIdApi(id);
       return data;
+    } catch (err) {
+      return rejectWithValue(err.response?.data?.detail || err.message);
+    }
+  }
+);
+
+export const deleteComplaint = createAsyncThunk(
+  'complaintsList/delete',
+  async (complaintId, { dispatch, rejectWithValue }) => {
+    try {
+      await deleteComplaintApi(complaintId);
+      // Re-fetch list immediately after deletion
+      dispatch(fetchComplaintsList({ search: '', severity: 'ALL' }));
+      return complaintId;
     } catch (err) {
       return rejectWithValue(err.response?.data?.detail || err.message);
     }
@@ -47,6 +61,10 @@ const complaintsListSlice = createSlice({
     },
     clearSelectedComplaint: (state) => {
       state.selectedComplaint = null;
+    },
+    resetFilters: (state) => {
+      state.filters.search = '';
+      state.filters.severity = 'ALL';
     }
   },
   extraReducers: (builder) => {
@@ -77,5 +95,5 @@ const complaintsListSlice = createSlice({
   }
 });
 
-export const { setFilterSearch, setFilterSeverity, clearSelectedComplaint } = complaintsListSlice.actions;
+export const { setFilterSearch, setFilterSeverity, clearSelectedComplaint, resetFilters } = complaintsListSlice.actions;
 export default complaintsListSlice.reducer;

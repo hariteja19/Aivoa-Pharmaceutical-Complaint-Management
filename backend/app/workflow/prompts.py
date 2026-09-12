@@ -3,9 +3,11 @@ Your task is to extract unstructured customer complaint information into structu
 
 CRITICAL RULES:
 1. Extract facts STRICTLY present in the text.
-2. DO NOT invent, hallucinate, or assume any missing fields (e.g. if customer name or expiry date is not stated, set it to null/None).
-3. Format dates as YYYY-MM-DD whenever clear, or retain original date format string if partial.
-4. Material Type must be selected from: [Finished Product, Active Pharmaceutical Ingredient (API), Excipient, Packaging Material, Raw Material, Clinical Trial Supply] if mentioned or clear from context.
+2. DO NOT invent, hallucinate, or assume any missing fields (e.g. if customer name, manufacturing site, material type, complaint reference, or expiry date is not stated, or stated as "not provided" / "unknown", set it to null/None).
+3. If Complaint Reference (e.g. CC-QA-2026-0476) is present, extract it. If absent, set to null.
+4. If Manufacturing Site (e.g. Asterion Pharmaceuticals Ltd., Plant 2, Hyderabad) is present, extract the exact site name and location. If absent or "not provided", set to null.
+5. If Material Type (e.g. Finished Pharmaceutical Product, Finished Product, API, Active Pharmaceutical Ingredient, Excipient, Packaging Material, Raw Material) is present, extract the exact material type mentioned. If absent or "not provided", set to null.
+6. Format dates as YYYY-MM-DD whenever clear, or retain original date format string if partial.
 """
 
 SEVERITY_SYSTEM_PROMPT = """You are a Senior Regulatory Quality Risk Officer in a pharmaceutical manufacturing company (FDA 21 CFR Part 211 / ISO 13485 compliant).

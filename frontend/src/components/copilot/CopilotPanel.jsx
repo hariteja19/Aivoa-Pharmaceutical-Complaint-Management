@@ -2,11 +2,159 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { Bot, Send, UploadCloud, Sparkles, RefreshCw, FileText, CheckCircle2, AlertTriangle, ShieldCheck, Copy, Brain, FileCheck } from 'lucide-react';
 import { sendCopilotMessage, addUserMessage, clearCopilotChat } from '../../store/slices/copilotSlice';
-import { uploadComplaintDoc, processTextComplaint } from '../../store/slices/complaintFormSlice';
+import { uploadComplaintDoc, processTextComplaint, resetComplaintForm } from '../../store/slices/complaintFormSlice';
 
 const SAMPLE_COMPLAINT = "A customer reported that several Metformin 500 mg tablets from batch MET500-KP4821 had broken tablets inside 15 blister packs. The batch was manufactured on 18 March 2026 and expires on 17 March 2029. The complaint was received on 11 September 2026. No patient injury was reported.";
 
 const SAMPLE_COMPLAINT_2 = "Customer: Green Valley Pharmacy. Product: Amoxicillin Capsules 250 mg. Batch / Lot: AMX250-B6729. Manufacturing Date: 22-May-2026. Expiry Date: 21-May-2029. Complaint Date: 10-Sep-2026. Complaint Type: Packaging / Product Appearance. Narrative: Approximately 8 bottles were affected with discolored capsules inside sealed packaging.";
+
+const renderCopilotMessage = (msg) => {
+  const text = msg.text || '';
+
+  // Check if this message represents field updates or risk assessment
+  const isUpdate = text.includes("I've updated the complaint record:") ||
+                   text.includes("Updated Complaint Fields") ||
+                   (msg.updates && Object.keys(msg.updates).length > 0) ||
+                   text.includes("•");
+
+  if (!isUpdate && !msg.riskAssessment) {
+    return <div style={{ whiteSpace: 'pre-line' }}>{text}</div>;
+  }
+
+  // Parse lines from text
+  const rawLines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  const bulletLines = [];
+  const introLines = [];
+
+  for (const line of rawLines) {
+    if (line.startsWith('•') || line.startsWith('-') || line.startsWith('*')) {
+      bulletLines.push(line.replace(/^[•\-*]\s*/, ''));
+    } else if (
+      !line.toLowerCase().includes("i've updated the complaint record") &&
+      !line.toLowerCase().includes("updated complaint fields")
+    ) {
+      introLines.push(line);
+    }
+  }
+
+  // Extract structured field pairs
+  const fieldItems = [];
+  if (bulletLines.length > 0) {
+    bulletLines.forEach((item) => {
+      const parts = item.split(/[→:]/);
+      if (parts.length >= 2) {
+        fieldItems.push({
+          label: parts[0].trim(),
+          val: parts.slice(1).join(':').trim()
+        });
+      } else {
+        fieldItems.push({ label: '', val: item });
+      }
+    });
+  } else if (msg.updates && Object.keys(msg.updates).length > 0) {
+    Object.entries(msg.updates).forEach(([k, v]) => {
+      if (v) {
+        const label = k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        fieldItems.push({ label, val: String(v) });
+      }
+    });
+  }
+
+  const risk = msg.riskAssessment;
+  const getRiskClassification = (sev) => {
+    if (sev === 'Critical') return 'High (Patient Safety Risk)';
+    if (sev === 'Major') return 'High (GxP Quality Impact)';
+    if (sev === 'Minor') return 'Medium (Non-Critical Defect)';
+    return 'Low (Routine Observation)';
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+      {introLines.length > 0 && (
+        <div style={{ color: '#334155', fontSize: '0.82rem', marginBottom: '2px' }}>
+          {introLines.join('\n')}
+        </div>
+      )}
+
+      {fieldItems.length > 0 && (
+        <div>
+          <div style={{
+            fontWeight: 700,
+            color: '#0369a1',
+            fontSize: '0.84rem',
+            marginBottom: '6px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px'
+          }}>
+            <CheckCircle2 size={14} color="#0284c7" />
+            Updated Complaint Fields
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', paddingLeft: '4px' }}>
+            {fieldItems.map((f, i) => (
+              <div key={i} style={{ fontSize: '0.81rem', display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
+                <span style={{ color: '#0284c7', fontWeight: 700 }}>•</span>
+                <div>
+                  {f.label && <strong style={{ color: '#334155' }}>{f.label}: </strong>}
+                  <span style={{ color: '#0f172a' }}>{f.val}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {risk && risk.severity_level && (
+        <div style={{
+          marginTop: fieldItems.length > 0 ? '4px' : '0',
+          paddingTop: fieldItems.length > 0 ? '6px' : '0',
+          borderTop: fieldItems.length > 0 ? '1px dashed #e2e8f0' : 'none'
+        }}>
+          <div style={{
+            fontWeight: 700,
+            color: '#0284c7',
+            fontSize: '0.84rem',
+            marginBottom: '6px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px'
+          }}>
+            <ShieldCheck size={14} color="#0284c7" />
+            Risk Assessment
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', paddingLeft: '4px' }}>
+            <div style={{ fontSize: '0.81rem', display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
+              <span style={{ color: '#0284c7', fontWeight: 700 }}>•</span>
+              <div>
+                <strong style={{ color: '#334155' }}>AI Risk Classification: </strong>
+                <span style={{ color: '#0f172a' }}>{getRiskClassification(risk.severity_level)}</span>
+              </div>
+            </div>
+            <div style={{ fontSize: '0.81rem', display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
+              <span style={{ color: '#0284c7', fontWeight: 700 }}>•</span>
+              <div>
+                <strong style={{ color: '#334155' }}>Initial Severity: </strong>
+                <span style={{
+                  color: risk.severity_level === 'Critical' ? '#dc2626' : risk.severity_level === 'Major' ? '#d97706' : '#0284c7',
+                  fontWeight: 600
+                }}>
+                  {risk.severity_level}
+                </span>
+              </div>
+            </div>
+            <div style={{ fontSize: '0.81rem', display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
+              <span style={{ color: '#0284c7', fontWeight: 700 }}>•</span>
+              <div>
+                <strong style={{ color: '#334155' }}>Priority: </strong>
+                <span style={{ color: '#0f172a' }}>{risk.priority || 'Medium'}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 export const CopilotPanel = () => {
   const dispatch = useDispatch();
@@ -15,6 +163,7 @@ export const CopilotPanel = () => {
   const { status, documentName, analysis } = useSelector((state) => state.complaintForm);
   
   const [chatInput, setChatInput] = useState('');
+  const [isDragging, setIsDragging] = useState(false);
   const messagesEndRef = useRef(null);
 
   const scrollToBottom = () => {
@@ -27,6 +176,29 @@ export const CopilotPanel = () => {
 
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
+    if (file) {
+      dispatch(uploadComplaintDoc(file));
+      dispatch(addUserMessage(`Uploaded file: ${file.name}`));
+    }
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    const file = e.dataTransfer?.files?.[0];
     if (file) {
       dispatch(uploadComplaintDoc(file));
       dispatch(addUserMessage(`Uploaded file: ${file.name}`));
@@ -82,7 +254,10 @@ export const CopilotPanel = () => {
         </div>
 
         <button
-          onClick={() => dispatch(clearCopilotChat())}
+          onClick={() => {
+            dispatch(clearCopilotChat());
+            dispatch(resetComplaintForm());
+          }}
           title="Reset Copilot Session"
           style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '4px' }}
         >
@@ -94,13 +269,17 @@ export const CopilotPanel = () => {
       <div style={{ padding: '16px', borderBottom: '1px solid #e2e8f0', background: '#ffffff' }}>
         <div
           onClick={() => fileInputRef.current?.click()}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
           style={{
-            border: '2px dashed #cbd5e1',
+            border: isDragging ? '2px dashed #0284c7' : '2px dashed #cbd5e1',
             borderRadius: '6px',
             padding: '16px',
             textAlign: 'center',
             cursor: 'pointer',
-            background: '#f8fafc',
+            background: isDragging ? '#e0f2fe' : '#f8fafc',
+            transform: isDragging ? 'scale(1.01)' : 'scale(1)',
             transition: 'all 0.2s ease'
           }}
         >
@@ -111,9 +290,9 @@ export const CopilotPanel = () => {
             accept=".pdf,.docx,.doc,.txt,.eml"
             style={{ display: 'none' }}
           />
-          <UploadCloud size={28} color="#0284c7" style={{ marginBottom: '4px' }} />
-          <p style={{ fontWeight: 600, fontSize: '0.85rem', color: '#0f172a', marginBottom: '2px' }}>
-            Drag & drop complaint document here
+          <UploadCloud size={28} color={isDragging ? '#0284c7' : '#64748b'} style={{ marginBottom: '4px' }} />
+          <p style={{ fontWeight: 600, fontSize: '0.85rem', color: isDragging ? '#0369a1' : '#0f172a', marginBottom: '2px' }}>
+            {isDragging ? 'Release to upload complaint document' : 'Drag & drop complaint document here'}
           </p>
           <p style={{ fontSize: '0.75rem', color: '#64748b' }}>
             or click to browse • Supported: PDF, DOCX, TXT, EML
@@ -211,7 +390,7 @@ export const CopilotPanel = () => {
                 boxShadow: msg.sender === 'user' ? 'none' : '0 1px 2px 0 rgba(0,0,0,0.05)',
                 whiteSpace: 'pre-line'
               }}>
-                {msg.text}
+                {msg.sender === 'copilot' ? renderCopilotMessage(msg) : msg.text}
               </div>
               <span style={{ fontSize: '0.65rem', color: '#94a3b8', marginTop: '2px', display: 'block', textAlign: msg.sender === 'user' ? 'right' : 'left' }}>
                 {msg.timestamp}
@@ -266,23 +445,41 @@ export const CopilotPanel = () => {
       </div>
 
       {/* Chat Input Bar */}
-      <div style={{ padding: '12px 16px', borderTop: '1px solid #e2e8f0', background: '#ffffff', display: 'flex', gap: '8px' }}>
-        <input
-          type="text"
+      <div style={{ padding: '12px 16px', borderTop: '1px solid #e2e8f0', background: '#ffffff', display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
+        <textarea
+          rows={1}
           value={chatInput}
-          onChange={(e) => setChatInput(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleSendChat()}
-          placeholder="Instruct Copilot to update any field..."
+          onChange={(e) => {
+            setChatInput(e.target.value);
+            e.target.style.height = 'auto';
+            e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              handleSendChat();
+            }
+          }}
+          placeholder="Paste complaint or instruct Copilot (Enter to send, Shift+Enter for newline)..."
           className="glass-input"
-          style={{ fontSize: '0.82rem' }}
+          style={{
+            fontSize: '0.82rem',
+            resize: 'none',
+            minHeight: '38px',
+            maxHeight: '120px',
+            overflowY: 'auto',
+            padding: '8px 12px',
+            lineHeight: '1.4'
+          }}
         />
         <button
           onClick={() => handleSendChat()}
           disabled={!chatInput.trim() || isThinking}
           className="glass-button-primary"
-          style={{ padding: '8px 12px' }}
+          style={{ padding: '9px 12px', height: '38px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          title="Send to Copilot"
         >
-          <Send size={14} />
+          <Send size={15} />
         </button>
       </div>
 

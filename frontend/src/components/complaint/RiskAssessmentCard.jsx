@@ -4,7 +4,7 @@ import { ShieldAlert, AlertTriangle, CheckCircle, Info } from 'lucide-react';
 
 export const RiskAssessmentCard = () => {
   const { analysis } = useSelector((state) => state.complaintForm);
-  const risk = analysis?.risk_assessment || { severity_level: 'Low', patient_risk_flag: false, rationale: 'Pending AI analysis' };
+  const risk = analysis?.risk_assessment || { severity_level: '', patient_risk_flag: false, rationale: 'Pending AI analysis' };
 
   const getSeverityBadgeStyle = (severity) => {
     switch (severity) {
@@ -14,8 +14,10 @@ export const RiskAssessmentCard = () => {
         return { bg: 'var(--severity-major-bg)', color: 'var(--severity-major)', border: 'rgba(255, 149, 0, 0.4)' };
       case 'Minor':
         return { bg: 'var(--severity-minor-bg)', color: 'var(--severity-minor)', border: 'rgba(255, 204, 0, 0.4)' };
-      default:
+      case 'Low':
         return { bg: 'var(--severity-low-bg)', color: 'var(--severity-low)', border: 'rgba(52, 199, 89, 0.4)' };
+      default:
+        return { bg: 'rgba(148, 163, 184, 0.1)', color: '#64748b', border: 'rgba(148, 163, 184, 0.3)' };
     }
   };
 
@@ -38,7 +40,7 @@ export const RiskAssessmentCard = () => {
           textTransform: 'uppercase',
           letterSpacing: '0.05em'
         }}>
-          {risk.severity_level || 'LOW'} SEVERITY
+          {risk.severity_level ? `${risk.severity_level.toUpperCase()} SEVERITY` : 'PENDING EVALUATION'}
         </span>
       </div>
 

@@ -12,6 +12,7 @@ REQUIRED_PHARMA_FIELDS = [
 ]
 
 ALL_FIELDS = [
+    "complaint_reference",
     "complaint_source",
     "customer_name",
     "product_name",

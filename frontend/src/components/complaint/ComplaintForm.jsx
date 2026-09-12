@@ -5,7 +5,7 @@ import { Save, CheckCircle2, Building, Package, AlertCircle, ShieldCheck } from 
 
 export const ComplaintForm = () => {
   const dispatch = useDispatch();
-  const { fields, highlightMap, status, submitStatus } = useSelector((state) => state.complaintForm);
+  const { fields, highlightMap, status, submitStatus, analysis } = useSelector((state) => state.complaintForm);
 
   useEffect(() => {
     if (Object.keys(highlightMap).length > 0) {
@@ -21,6 +21,7 @@ export const ComplaintForm = () => {
   };
 
   const handleSubmit = () => {
+    if (submitStatus === 'submitting' || submitStatus === 'success') return;
     dispatch(submitComplaintRecord());
   };
 
@@ -50,7 +51,20 @@ export const ComplaintForm = () => {
         <h3 style={{ fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#0369a1', fontWeight: 700, marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
           <Building size={15} /> SECTION 1: ORIGIN & CUSTOMER DETAILS
         </h3>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: '0.8rem', color: '#475569', fontWeight: 500, marginBottom: '4px' }}>Complaint Reference</label>
+            <input
+              type="text"
+              className={getFieldClass('complaint_reference')}
+              placeholder="e.g. CC-QA-2026-0476"
+              value={fields.complaint_reference || fields.complaint_number || ''}
+              onChange={(e) => {
+                handleChange('complaint_reference', e.target.value);
+                handleChange('complaint_number', e.target.value);
+              }}
+            />
+          </div>
           <div>
             <label style={{ display: 'block', fontSize: '0.8rem', color: '#475569', fontWeight: 500, marginBottom: '4px' }}>Complaint Source</label>
             <input
@@ -94,10 +108,13 @@ export const ComplaintForm = () => {
             <label style={{ display: 'block', fontSize: '0.8rem', color: '#475569', fontWeight: 500, marginBottom: '4px' }}>Product Strength / Grade</label>
             <input
               type="text"
-              className={getFieldClass('product_strength_grade')}
-              placeholder="e.g. 500 mg, 250 mg"
-              value={fields.product_strength_grade || ''}
-              onChange={(e) => handleChange('product_strength_grade', e.target.value)}
+              className={getFieldClass('product_strength_grade') || getFieldClass('product_strength')}
+              placeholder="e.g. 500 mg, 250 mg, 1 g/vial"
+              value={fields.product_strength || fields.product_strength_grade || ''}
+              onChange={(e) => {
+                handleChange('product_strength_grade', e.target.value);
+                handleChange('product_strength', e.target.value);
+              }}
             />
           </div>
           <div>
@@ -105,7 +122,7 @@ export const ComplaintForm = () => {
             <input
               type="text"
               className={getFieldClass('batch_lot_number')}
-              placeholder="e.g. MET500-KP4821"
+              placeholder="e.g. MET500-KP4821, CFT1G-R4516"
               value={fields.batch_lot_number || ''}
               onChange={(e) => handleChange('batch_lot_number', e.target.value)}
             />
@@ -115,7 +132,7 @@ export const ComplaintForm = () => {
             <input
               type="text"
               className={getFieldClass('affected_quantity')}
-              placeholder="e.g. 15 blister packs, 50 kg"
+              placeholder="e.g. Approximately 20 vials, 50 kg"
               value={fields.affected_quantity || ''}
               onChange={(e) => handleChange('affected_quantity', e.target.value)}
             />
@@ -136,6 +153,26 @@ export const ComplaintForm = () => {
               className={getFieldClass('expiry_date')}
               value={fields.expiry_date || ''}
               onChange={(e) => handleChange('expiry_date', e.target.value)}
+            />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '0.8rem', color: '#475569', fontWeight: 500, marginBottom: '4px' }}>Manufacturing Site</label>
+            <input
+              type="text"
+              className={getFieldClass('manufacturing_site')}
+              placeholder="e.g. Site Alpha - Dublin"
+              value={fields.manufacturing_site || ''}
+              onChange={(e) => handleChange('manufacturing_site', e.target.value)}
+            />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '0.8rem', color: '#475569', fontWeight: 500, marginBottom: '4px' }}>Material Type</label>
+            <input
+              type="text"
+              className={getFieldClass('material_type')}
+              placeholder="e.g. Finished Product, API"
+              value={fields.material_type || ''}
+              onChange={(e) => handleChange('material_type', e.target.value)}
             />
           </div>
         </div>
@@ -191,9 +228,10 @@ export const ComplaintForm = () => {
             <label style={{ display: 'block', fontSize: '0.8rem', color: '#475569', fontWeight: 500, marginBottom: '4px' }}>Initial Severity</label>
             <select
               className={getFieldClass('severity_level')}
-              value={fields.severity_level || 'Low'}
+              value={fields.severity_level || analysis?.risk_assessment?.severity_level || ''}
               onChange={(e) => handleChange('severity_level', e.target.value)}
             >
+              <option value="">Select Severity...</option>
               <option value="Low">Low</option>
               <option value="Minor">Minor</option>
               <option value="Major">Major</option>
@@ -204,9 +242,10 @@ export const ComplaintForm = () => {
             <label style={{ display: 'block', fontSize: '0.8rem', color: '#475569', fontWeight: 500, marginBottom: '4px' }}>Priority</label>
             <select
               className={getFieldClass('priority')}
-              value={fields.priority || 'Medium'}
+              value={fields.priority || analysis?.risk_assessment?.priority || ''}
               onChange={(e) => handleChange('priority', e.target.value)}
             >
+              <option value="">Select Priority...</option>
               <option value="Low">Low</option>
               <option value="Medium">Medium</option>
               <option value="High">High</option>
@@ -225,7 +264,7 @@ export const ComplaintForm = () => {
         )}
         <button
           onClick={handleSubmit}
-          disabled={submitStatus === 'submitting' || !fields.product_name || !fields.batch_lot_number}
+          disabled={submitStatus === 'submitting' || submitStatus === 'success' || !fields.product_name || !fields.batch_lot_number}
           className="glass-button-primary"
         >
           <Save size={16} />

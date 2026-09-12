@@ -12,6 +12,8 @@ from app.schemas.complaint import (
     ComplaintResponseSchema,
     ComplaintListResponse
 )
+from app.schemas.email import EmailDraftRequest, EmailDraftResponse
+from app.services.email_generator import EmailGeneratorService
 from app.services.doc_parser import DocumentParserService
 from app.workflow.graph import complaint_workflow_app
 
@@ -99,6 +101,21 @@ async def upload_complaint_document(
         logger.error(f"Error executing graph on uploaded document: {e}")
         raise HTTPException(status_code=500, detail=f"Error analyzing document content: {str(e)}")
 
+@router.post("/email-draft", response_model=EmailDraftResponse)
+def generate_complaint_email_draft(
+    payload: EmailDraftRequest
+):
+    """
+    Generate professional GxP complaint notification email draft based on current complaint state.
+    Uses configured Groq LLM or deterministic zero-hallucination fallback engine.
+    """
+    try:
+        draft = EmailGeneratorService.generate_draft(payload)
+        return draft
+    except Exception as e:
+        logger.error(f"Error generating email draft: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate email draft: {str(e)}")
+
 @router.post("", response_model=ComplaintResponseSchema)
 def create_complaint_record(
     payload: ComplaintCreateSchema,
@@ -108,13 +125,25 @@ def create_complaint_record(
     Save approved complaint record to PostgreSQL / Database.
     """
     try:
-        cmp_number = generate_complaint_number()
+        import json
+        logger.info("[COPILOT DEBUG STEP 8 - API SUBMIT PAYLOAD]\n%s", json.dumps(payload.model_dump(exclude_none=True), indent=2, default=str))
+        cmp_ref = (payload.complaint_reference or getattr(payload, "complaint_number", "") or "").strip()
+        if cmp_ref:
+            existing = db.query(Complaint).filter(Complaint.complaint_number == cmp_ref).first()
+            if existing:
+                cmp_number = f"{cmp_ref}-{generate_complaint_number().split('-')[-1]}"
+            else:
+                cmp_number = cmp_ref
+        else:
+            cmp_number = generate_complaint_number()
+
         new_complaint = Complaint(
             complaint_number=cmp_number,
+            complaint_reference=cmp_ref or cmp_number,
             complaint_source=payload.complaint_source,
             customer_name=payload.customer_name,
             product_name=payload.product_name or "Unspecified Product",
-            product_strength_grade=payload.product_strength_grade,
+            product_strength_grade=payload.product_strength_grade or getattr(payload, "product_strength", None),
             batch_lot_number=payload.batch_lot_number or "UNSPECIFIED",
             affected_quantity=payload.affected_quantity,
             manufacturing_date=payload.manufacturing_date,
@@ -127,7 +156,7 @@ def create_complaint_record(
             completeness_score=payload.completeness_score or 0.0,
             is_complete=payload.is_complete or False,
             missing_fields=payload.missing_fields or [],
-            severity_level=payload.severity_level or "Low",
+            severity_level=payload.severity_level or "Minor",
             patient_risk_flag=payload.patient_risk_flag or False,
             risk_rationale=payload.risk_rationale,
             is_possible_duplicate=payload.is_possible_duplicate or False,
@@ -142,6 +171,8 @@ def create_complaint_record(
         db.add(new_complaint)
         db.commit()
         db.refresh(new_complaint)
+        logger.info("[COPILOT DEBUG STEP 9 - DATABASE STORED RECORD]\nID: %s | Number: %s | Ref: %s | Severity: %s | Site: %s | Batch: %s",
+                    new_complaint.id, new_complaint.complaint_number, new_complaint.complaint_reference, new_complaint.severity_level, new_complaint.manufacturing_site, new_complaint.batch_lot_number)
         return new_complaint
     except Exception as e:
         db.rollback()
@@ -171,6 +202,7 @@ def list_complaints(
             (Complaint.batch_lot_number.ilike(s)) |
             (Complaint.customer_name.ilike(s)) |
             (Complaint.complaint_number.ilike(s)) |
+            (Complaint.complaint_reference.ilike(s)) |
             (Complaint.complaint_description.ilike(s))
         )
 
@@ -188,10 +220,35 @@ def get_complaint_by_id(
     Retrieve single complaint details by UUID or Complaint Number.
     """
     cmp_rec = db.query(Complaint).filter(
-        (Complaint.id == complaint_id) | (Complaint.complaint_number == complaint_id)
+        (Complaint.id == complaint_id) |
+        (Complaint.complaint_number == complaint_id) |
+        (Complaint.complaint_reference == complaint_id)
     ).first()
 
     if not cmp_rec:
         raise HTTPException(status_code=404, detail="Complaint record not found.")
 
     return cmp_rec
+
+@router.delete("/{complaint_id}", status_code=204)
+def delete_complaint(
+    complaint_id: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Delete a single complaint record by UUID id or complaint_number.
+    Returns 204 No Content on success.
+    """
+    cmp_rec = db.query(Complaint).filter(
+        (Complaint.id == complaint_id) |
+        (Complaint.complaint_number == complaint_id) |
+        (Complaint.complaint_reference == complaint_id)
+    ).first()
+
+    if not cmp_rec:
+        raise HTTPException(status_code=404, detail="Complaint record not found.")
+
+    db.delete(cmp_rec)
+    db.commit()
+    logger.info("Deleted complaint record: %s (%s)", cmp_rec.complaint_number, complaint_id)
+
